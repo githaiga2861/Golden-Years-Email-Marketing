@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Golden Years Email Marketing</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0b5394" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <!-- ============ LOGIN ============ -->
+  <section id="login-view" class="login hidden">
+    <form id="login-form" class="card login-card">
+      <img class="login-logo" src="icons/icon-192.png" alt="Golden Years" />
+      <span class="eyebrow">Staff only</span>
+      <h1>Email Marketing</h1>
+      <hr class="gold-rule" />
+      <p class="muted">Sign in with the user you created in Supabase (Authentication → Users).</p>
+      <label>Email <input type="email" id="login-email" required autocomplete="username" /></label>
+      <label>Password <input type="password" id="login-password" required autocomplete="current-password" /></label>
+      <button type="submit" class="btn primary block">Sign in</button>
+      <p id="login-error" class="error"></p>
+      <a class="back-link admin-link" href="#">← Back to Golden Years Admin</a>
+    </form>
+  </section>
+
+  <!-- ============ CONFIG MISSING ============ -->
+  <section id="config-view" class="login hidden">
+    <div class="card login-card">
+      <h1>Almost there</h1>
+      <p>Open <code>config.js</code> and paste your Supabase project URL and anon key, then reload this page. See README.md for the full setup.</p>
+    </div>
+  </section>
+
+  <!-- ============ APP ============ -->
+  <div id="app-view" class="app hidden">
+    <header class="topbar">
+      <a class="btn ghost small admin-link" href="#" title="Back to Golden Years Admin">← Admin</a>
+      <div class="brand"><img src="icons/icon-192.png" alt="" /><div>Golden Years<span>Email Marketing</span></div></div>
+      <nav class="tabs" id="tabs">
+        <button data-tab="compose" class="active">Compose</button>
+        <button data-tab="contacts">Contacts</button>
+        <button data-tab="templates">Templates</button>
+        <button data-tab="log">Sent log</button>
+        <button data-tab="settings">Settings</button>
+      </nav>
+      <button id="logout" class="btn ghost small">Sign out</button>
+    </header>
+
+    <main>
+      <!-- ---------- COMPOSE ---------- -->
+      <section id="tab-compose" class="tab">
+        <div class="compose-grid">
+          <aside class="panel">
+            <h2>1. Pick a template</h2>
+            <div id="template-list" class="template-list"></div>
+          </aside>
+
+          <section class="panel">
+            <h2>2. Choose receivers <span id="selected-count" class="pill">0 selected</span></h2>
+            <div class="filters">
+              <input id="r-search" type="search" placeholder="Search facility, name, city, email…" />
+              <select id="r-category">
+                <option value="">All categories</option>
+                <option value="hospital">Hospital</option>
+                <option value="snf">Skilled nursing</option>
+                <option value="rehab">Rehab</option>
+                <option value="memory_care">Memory care / AL</option>
+                <option value="afh">Adult family home</option>
+              </select>
+              <select id="r-county"><option value="">All counties</option></select>
+              <select id="r-status">
+                <option value="">Any status</option>
+                <option value="not_contacted">Not contacted</option>
+                <option value="in_sequence">In sequence</option>
+                <option value="replied">Replied</option>
+                <option value="meeting">Meeting</option>
+                <option value="partner">Partner</option>
+              </select>
+            </div>
+            <div class="filters small">
+              <label class="check"><input type="checkbox" id="r-match" checked /> Only categories this template is written for</label>
+              <span class="spacer"></span>
+              <button id="r-select-all" class="btn ghost small">Select all shown</button>
+              <button id="r-clear" class="btn ghost small">Clear</button>
+            </div>
+            <div id="recipient-list" class="recipient-list"></div>
+            <p class="muted small">Contacts without an email or marked "Do not contact" can't be selected.</p>
+            <button id="generate" class="btn primary block">3. Generate personalized emails</button>
+          </section>
+        </div>
+
+        <section id="drafts-section" class="panel hidden">
+          <div class="drafts-head">
+            <h2>4. Review and send <span id="draft-count" class="pill"></span></h2>
+            <div class="actions">
+              <button id="open-next" class="btn">Open next in Gmail</button>
+              <button id="open-all" class="btn primary">Open all in Gmail</button>
+            </div>
+          </div>
+          <div id="manual-fields" class="manual-fields hidden"></div>
+          <p id="drafts-msg" class="notice hidden"></p>
+          <div id="drafts" class="drafts"></div>
+        </section>
+      </section>
+
+      <!-- ---------- CONTACTS ---------- -->
+      <section id="tab-contacts" class="tab hidden">
+        <div class="panel">
+          <div class="drafts-head">
+            <h2>Contacts <span id="contact-count" class="pill"></span></h2>
+            <div class="actions">
+              <input id="c-search" type="search" placeholder="Search…" />
+              <button id="c-add" class="btn primary">Add contact</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Facility</th><th>Category</th><th>Location</th><th>Name</th><th>Email</th><th>Status</th><th>Last contacted</th><th></th></tr></thead>
+              <tbody id="contact-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- TEMPLATES ---------- -->
+      <section id="tab-templates" class="tab hidden">
+        <div class="tpl-grid">
+          <aside class="panel">
+            <div class="drafts-head"><h2>Templates</h2><button id="t-new" class="btn small primary">New</button></div>
+            <div id="tpl-edit-list" class="template-list"></div>
+          </aside>
+          <section class="panel">
+            <form id="tpl-form">
+              <div class="row">
+                <label>Code <input id="t-code" placeholder="e.g. 1A" /></label>
+                <label>Stage
+                  <select id="t-stage">
+                    <option value="1">1 · Introduction</option>
+                    <option value="2">2 · Value follow-up</option>
+                    <option value="3">3 · Meeting offer</option>
+                    <option value="4">4 · Final follow-up</option>
+                    <option value="5">5 · After a reply</option>
+                  </select>
+                </label>
+                <label>Order <input id="t-order" type="number" /></label>
+              </div>
+              <label>Name <input id="t-name" required /></label>
+              <fieldset class="cats">
+                <legend>Written for (leave all unticked = every category)</legend>
+                <label class="check"><input type="checkbox" value="hospital" /> Hospital</label>
+                <label class="check"><input type="checkbox" value="snf" /> Skilled nursing</label>
+                <label class="check"><input type="checkbox" value="rehab" /> Rehab</label>
+                <label class="check"><input type="checkbox" value="memory_care" /> Memory care / AL</label>
+                <label class="check"><input type="checkbox" value="afh" /> Adult family home</label>
+              </fieldset>
+              <label>Subject <input id="t-subject" required /></label>
+              <label>Body <textarea id="t-body" rows="18" required></textarea></label>
+              <p class="muted small">Auto-filled: {first_name} {contact_name} {facility} {city} {county} {sender_name} {sender_title} {direct_line} {client_noun} {category_line} {signature} {previous_subject}. Any other {placeholder} becomes a box you fill in before sending.</p>
+              <div class="actions">
+                <button type="submit" class="btn primary">Save template</button>
+                <button type="button" id="t-delete" class="btn danger">Delete</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <!-- ---------- LOG ---------- -->
+      <section id="tab-log" class="tab hidden">
+        <div class="panel">
+          <h2>Sent log <span class="muted small">(emails opened in Gmail from this app)</span></h2>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>When</th><th>Facility</th><th>To</th><th>Template</th><th>Subject</th></tr></thead>
+              <tbody id="log-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- SETTINGS ---------- -->
+      <section id="tab-settings" class="tab hidden">
+        <form id="settings-form" class="panel narrow">
+          <h2>Sender settings</h2>
+          <label>Your name <input id="s-sender_name" /></label>
+          <label>Your title <input id="s-sender_title" /></label>
+          <label>Direct line <input id="s-direct_line" /></label>
+          <label>Gmail account to send from <input id="s-gmail_account" type="email" placeholder="you@gmail.com (optional)" /></label>
+          <p class="muted small">If you're signed in to several Google accounts, this makes Gmail open the compose window in the right one.</p>
+          <h3>Signature preview</h3>
+          <pre id="sig-preview" class="sig"></pre>
+          <button type="submit" class="btn primary">Save settings</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ CONTACT MODAL ============ -->
+  <dialog id="contact-dialog">
+    <form id="contact-form" method="dialog" class="modal">
+      <h2 id="contact-dialog-title">Contact</h2>
+      <label>Facility <input id="f-facility" required /></label>
+      <div class="row">
+        <label>Category
+          <select id="f-category">
+            <option value="hospital">Hospital</option>
+            <option value="snf">Skilled nursing</option>
+            <option value="rehab">Rehab</option>
+            <option value="memory_care">Memory care / AL</option>
+            <option value="afh">Adult family home</option>
+          </select>
+        </label>
+        <label>County <input id="f-county" /></label>
+        <label>City <input id="f-city" /></label>
+      </div>
+      <div class="row">
+        <label>Contact name (owner / person to greet) <input id="f-contact_name" /></label>
+        <label>Role <input id="f-role" /></label>
+      </div>
+      <div class="row">
+        <label>Email <input id="f-email" type="email" /></label>
+        <label>Phone <input id="f-phone" /></label>
+      </div>
+      <label>Email note <input id="f-email_note" placeholder="e.g. general inbox" /></label>
+      <label>Status
+        <select id="f-status">
+          <option value="not_contacted">Not contacted</option>
+          <option value="in_sequence">In sequence</option>
+          <option value="replied">Replied</option>
+          <option value="meeting">Meeting</option>
+          <option value="partner">Partner</option>
+          <option value="do_not_contact">Do not contact</option>
+        </select>
+      </label>
+      <label>Notes <textarea id="f-notes" rows="3"></textarea></label>
+      <label>Source <input id="f-source" /></label>
+      <div class="actions">
+        <button value="cancel" formnovalidate class="btn ghost">Cancel</button>
+        <button id="contact-delete" type="button" class="btn danger">Delete</button>
+        <button id="contact-save" value="save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
