@@ -128,6 +128,11 @@
     return TEAM_GREETING[contact.category] || "there";
   }
 
+  // The Gmail account emails open in: Settings value first, then config.js SENDER_EMAIL.
+  function senderEmail() {
+    return ((state.settings.gmail_account || "").trim() || (cfg.SENDER_EMAIL || "").trim()).toLowerCase();
+  }
+
   function signature() {
     const s = state.settings;
     return [
@@ -136,7 +141,7 @@
       "A Golden Years Home Health company — RN-led, founded by Rose Mbote, BSN, RN",
       "Main (206) 717-1234 · Office (253) 487-7217 · Fax (253) 229-8194",
       s.direct_line && s.direct_line !== "(253) 487-7217" ? `Direct ${s.direct_line}` : null,
-      "contact@goldenyearshomehealthllc.com",
+      senderEmail() || "contact@goldenyearshomehealthllc.com",
       "https://goldenyearshomecarewa.com",
       "Free care consultation: https://goldenyearshomecarewa.com/contact",
       "614 Harrison St, Suite C, Sumner, WA 98390",
@@ -186,9 +191,11 @@
 
   function gmailUrl(to, subject, body) {
     const p = new URLSearchParams({ view: "cm", fs: "1", tf: "1", to, su: subject, body });
-    const acct = (state.settings.gmail_account || "").trim();
-    if (acct) p.set("authuser", acct);
-    return "https://mail.google.com/mail/?" + p.toString();
+    // /mail/u/<email>/ makes Gmail open in that exact account even when several are signed in.
+    const acct = senderEmail().replace(/[^a-z0-9@._+-]/g, "");
+    if (!acct) return "https://mail.google.com/mail/?" + p.toString();
+    p.set("authuser", acct);
+    return `https://mail.google.com/mail/u/${acct}/?` + p.toString();
   }
 
   // ---------------------------------------------------------------- data
@@ -452,6 +459,9 @@
     box.replaceChildren();
     const openedCount = state.drafts.filter((d) => d.opened).length;
     $("#draft-count").textContent = `${openedCount} of ${state.drafts.length} opened`;
+    $("#sending-from").textContent = senderEmail()
+      ? `Opens in Gmail as ${senderEmail()}`
+      : "No sending account set – Gmail will use your default account. Set one in Settings.";
 
     state.drafts.forEach((d, i) => {
       const subj = el("input", { value: d.subject, oninput: (e) => { d.subject = e.target.value; refreshWarn(); } });

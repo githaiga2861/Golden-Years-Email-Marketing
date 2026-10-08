@@ -6,4 +6,6 @@ window.APP_CONFIG = {
   SUPABASE_URL: "https://tpxgkfxnesonedplzcrd.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_bIl_W7ieXFkVo1NgjREFTw_i-AvPEpW",
   ADMIN_URL: "https://golden-years-websites-admin.vercel.app",
+  // Gmail account every email opens in (overridden by Settings → "Gmail account to send from")
+  SENDER_EMAIL: "jose.githaiga.njoroge@goldenyearshomehealthllc.com",
 };
