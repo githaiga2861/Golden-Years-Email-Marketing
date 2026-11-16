@@ -1,5 +1,7 @@
 -- Seed: referral contacts (generated from Golden_Years_Referral_Contacts.xlsx)
-insert into public.contacts (facility, category, county, city, contact_name, role, email, email_note, phone, source) values
+-- Only seeds when the contacts table is empty, so re-running never duplicates.
+insert into public.contacts (facility, category, county, city, contact_name, role, email, email_note, phone, source)
+select * from (values
 ('Olympic View Post Acute', 'snf', 'Clallam', 'Port Angeles', 'Victor Odiakosa', 'Administrator: Victor Odiakosa (ask for Admissions / Social Services)', 'vodiakosa@olympicviewpa.com', null, '360-452-9206', 'whca.org/facility-finder/olympic-view-post-acute/; olympicviewpa.com/contact-us/ (email)'),
 ('Avamere Olympic Rehabilitation of Sequim', 'snf', 'Clallam', 'Sequim', null, 'Admissions', null, null, '360-582-3900', 'whca.org/facility-finder/avamere-olympic-rehabilitation-of-sequim/'),
 ('Sequim Bay Post Acute', 'snf', 'Clallam', 'Sequim', null, 'Admissions / facility contact (email listed on facility site)', 'ddeangelo@sequimbaypa.com', null, '360-582-2400', 'whca.org/facility-finder/sequim-bay-post-acute/; sequimbaypa.com/contact-us/ (email)'),
@@ -136,4 +138,5 @@ insert into public.contacts (facility, category, county, city, contact_name, rol
 ('Linden Grove Health Care Center', 'rehab', 'Pierce', 'Puyallup', 'Bob Rowe', 'Social Services Director / Admissions (no named social worker published – ask by title) – Administrator: Bob Rowe', null, null, '253-840-4400 (fax 253-840-6733)', 'whca.org/facility-finder/linden-grove-center/; facility site'),
 ('Puyallup Post Acute', 'rehab', 'Pierce', 'Puyallup', 'William Jenkins', 'Social Services Director / Admissions (no named social worker published – ask by title) – Administrator: William Jenkins', null, null, '253-845-6631 (fax 253-770-1945)', 'whca.org/facility-finder/puyallup-post-acute/'),
 ('Rainier Rehabilitation', 'rehab', 'Pierce', 'Puyallup', 'Brett Watson', 'Social Services Director / Admissions (no named social worker published – ask by title) – Exec. Director: Brett Watson', 'contact-Rainier@ensignservices.net', null, '253-841-3422 (fax 253-848-3937)', 'whca.org/facility-finder/rainier-rehabilitation/; rainierrehabilitation.com/contact-us/ (email)'),
-('Virginia Mason Franciscan Health Rehabilitation Hospital', 'rehab', 'Pierce', 'Tacoma (serves St. Joseph/St. Clare/St. Francis)', null, 'Admissions / Clinical Liaison; ask for case management', null, null, '253-444-3320', 'vmfhrehabhospital.com');
+('Virginia Mason Franciscan Health Rehabilitation Hospital', 'rehab', 'Pierce', 'Tacoma (serves St. Joseph/St. Clare/St. Francis)', null, 'Admissions / Clinical Liaison; ask for case management', null, null, '253-444-3320', 'vmfhrehabhospital.com')) as v(facility, category, county, city, contact_name, role, email, email_note, phone, source)
+where not exists (select 1 from public.contacts);
