@@ -46,7 +46,10 @@
     3: "3 · Meeting offer (day 10)",
     4: "4 · Final follow-up (day 21)",
     5: "5 · After a reply",
+    6: "★ Short marketing",
   };
+  const SHORT = "Short marketing"; // campaign tag for quick, highlighted outreach lists
+  const isShort = (c) => (c.campaign || "") === SHORT;
   // Greeting used when we don't know the person's name
   const TEAM_GREETING = {
     hospital: "Care Management Team",
@@ -73,8 +76,11 @@
   };
   const AUTO_FIELDS = new Set([
     "first_name", "contact_name", "facility", "city", "county", "sender_name", "sender_title",
-    "direct_line", "client_noun", "category_line", "signature", "previous_subject",
+    "direct_line", "client_noun", "category_line", "signature", "previous_subject", "image_link",
   ]);
+  const MAIN_INBOX = "contact@goldenyearshomehealthllc.com";
+  const IMAGE_BUCKET = "outreach-images";
+  const DEFAULT_IMAGE_CAPTION = "Here's a one-page overview of our services you can share with your team";
 
   const state = {
     contacts: [],
@@ -87,6 +93,9 @@
     manualValues: {},
     editingTemplateId: null,
     editingContactId: null,
+    images: [],
+    imagesError: null,
+    draftImage: null, // image attached to the current set of drafts
   };
 
   // ---------------------------------------------------------------- helpers
@@ -141,8 +150,10 @@
       "A Golden Years Home Health company — RN-led, founded by Rose Mbote, BSN, RN",
       "Main (206) 717-1234 · Office (253) 487-7217 · Fax (253) 229-8194",
       s.direct_line && s.direct_line !== "(253) 487-7217" ? `Direct ${s.direct_line}` : null,
-      senderEmail() || "contact@goldenyearshomehealthllc.com",
-      "https://goldenyearshomecarewa.com",
+      senderEmail() && senderEmail() !== MAIN_INBOX ? senderEmail() : null,
+      MAIN_INBOX,
+      "Home care: https://goldenyearshomecarewa.com",
+      "Home health & skilled nursing: https://goldenyearshomehealthllc.com",
       "Free care consultation: https://goldenyearshomecarewa.com/contact",
       "614 Harrison St, Suite C, Sumner, WA 98390",
       "",
@@ -207,6 +218,9 @@
       sb.from("email_log").select("contact_id, template_id, subject, opened_at").order("opened_at", { ascending: true }),
     ]);
     for (const r of [c, t, s, l]) if (r.error) throw r.error;
+    const im = await sb.from("images").select("*").order("created_at", { ascending: false });
+    state.images = im.error ? [] : im.data;
+    state.imagesError = im.error ? "Images aren't set up yet. Run supabase/04_images.sql in the Supabase SQL Editor, then reload." : null;
     state.contacts = c.data;
     state.templates = t.data.map((x) => ({ ...x, categories: x.categories || [] }));
     state.settings = Object.fromEntries(s.data.map((r) => [r.key, r.value]));
@@ -275,6 +289,8 @@
     renderTemplateEditorList();
     renderSettings();
     renderLog();
+    renderImages();
+    renderImagePicker();
   }
 
   // ================================================================ COMPOSE
@@ -286,16 +302,18 @@
     const box = $("#template-list");
     box.replaceChildren();
     let stage = null;
-    for (const t of state.templates) {
+    // short marketing templates are pinned to the top
+    for (const t of [...state.templates].sort((x, y) => (y.stage === 6) - (x.stage === 6))) {
       if (t.stage !== stage) {
         stage = t.stage;
         box.append(el("div", { class: "stage-label" }, STAGE_LABEL[stage] || `Stage ${stage}`));
       }
       box.append(
         el("button", {
-          class: "tpl" + (t.id === state.selectedTemplateId ? " active" : ""),
+          class: "tpl" + (t.stage === 6 ? " short" : "") + (t.id === state.selectedTemplateId ? " active" : ""),
           onclick: () => {
             state.selectedTemplateId = t.id;
+            $("#r-campaign").value = t.stage === 6 ? SHORT : "";
             // drop selected receivers this template isn't written for, so nothing hidden gets emailed
             if (t.categories.length) {
               for (const id of [...state.selectedIds]) {
@@ -329,12 +347,14 @@
     const cat = $("#r-category").value;
     const county = $("#r-county").value;
     const status = $("#r-status").value;
+    const campaign = $("#r-campaign").value;
     const t = selectedTemplate();
     const matchOnly = $("#r-match").checked && t && t.categories.length;
     return state.contacts.filter((c) => {
       if (cat && c.category !== cat) return false;
       if (county && c.county !== county) return false;
       if (status && c.status !== status) return false;
+      if (campaign && (c.campaign || "") !== campaign) return false;
       if (matchOnly && !t.categories.includes(c.category)) return false;
       if (q) {
         const hay = [c.facility, c.contact_name, c.city, c.county, c.email, c.role].join(" ").toLowerCase();
@@ -351,11 +371,11 @@
     list.replaceChildren();
     const rows = filteredRecipients();
     // emailable first
-    rows.sort((a, b) => (sendable(b) - sendable(a)) || a.facility.localeCompare(b.facility));
+    rows.sort((a, b) => (isShort(b) - isShort(a)) || (sendable(b) - sendable(a)) || a.facility.localeCompare(b.facility));
     for (const c of rows) {
       const ok = sendable(c);
       list.append(
-        el("label", { class: "recipient" + (ok ? "" : " disabled") },
+        el("label", { class: "recipient" + (ok ? "" : " disabled") + (isShort(c) ? " short" : "") },
           el("input", {
             type: "checkbox",
             checked: state.selectedIds.has(c.id),
@@ -366,9 +386,10 @@
             },
           }),
           el("div", { class: "r-main" },
-            el("div", {}, el("strong", {}, c.facility), " ", el("span", { class: "tag " + c.category }, CATEGORY_LABEL[c.category])),
+            el("div", {}, el("strong", {}, c.facility), " ", el("span", { class: "tag " + c.category }, CATEGORY_LABEL[c.category]),
+              isShort(c) ? el("span", { class: "tag shortm" }, "★ Short marketing") : null),
             el("div", { class: "muted small" },
-              [c.contact_name, [c.city, c.county].filter(Boolean).join(", "), c.email || "no email"].filter(Boolean).join(" · ")),
+              [c.contact_name, [c.city, c.county].filter(Boolean).join(", "), c.email || (c.phone ? `no email · call ${c.phone}` : "no email")].filter(Boolean).join(" · ")),
           ),
           el("span", { class: "status " + c.status }, STATUS_LABEL[c.status] || c.status),
         ),
@@ -382,7 +403,7 @@
     $("#selected-count").textContent = `${state.selectedIds.size} selected`;
   }
 
-  ["#r-search", "#r-category", "#r-county", "#r-status", "#r-match"].forEach((s) =>
+  ["#r-search", "#r-category", "#r-county", "#r-status", "#r-campaign", "#r-match"].forEach((s) =>
     $(s).addEventListener("input", renderRecipients));
   $("#r-select-all").addEventListener("click", () => {
     filteredRecipients().filter(sendable).forEach((c) => state.selectedIds.add(c.id));
@@ -402,14 +423,24 @@
 
     const mismatched = chosen.filter((c) => t.categories.length && !t.categories.includes(c.category));
     state.manualValues = {};
+    const img = state.images.find((x) => String(x.id) === $("#c-image").value) || null;
+    state.draftImage = img;
+    const body = img ? withImageLine(t.body, img) : t.body;
+    const extra = img ? { image_link: img.url } : {};
     state.drafts = chosen.map((c) => ({
       contact: c,
       template: t,
       to: c.email,
-      subject: fill(t.subject, c),
-      body: fill(t.body, c),
+      subject: fill(t.subject, c, extra),
+      body: fill(body, c, extra),
+      image: img,
       opened: false,
     }));
+    const tip = $("#image-tip");
+    if (img) {
+      tip.textContent = `"${img.name}" is linked in every email. When you open a draft, the picture is also copied: click inside the Gmail message where you want it and press Ctrl+V.`;
+      show(tip);
+    } else show(tip, false);
     renderManualFields();
     renderDrafts();
     const msg = $("#drafts-msg");
@@ -491,6 +522,7 @@
         warn,
         el("div", { class: "actions" },
           el("button", { class: "btn ghost small", onclick: () => copyDraft(d) }, "Copy text"),
+          d.image ? el("button", { class: "btn ghost small", onclick: () => copyImage(d.image) }, "Copy image") : null,
           el("button", { class: "btn ghost small", onclick: () => { state.drafts.splice(i, 1); renderDrafts(); } }, "Remove"),
           el("button", { class: "btn primary small", onclick: () => openDraft(d) }, d.opened ? "Open again in Gmail" : "Open in Gmail"),
         ),
@@ -524,6 +556,7 @@
     }
     const url = gmailUrl(d.to, d.subject, d.body);
     if (url.length > 8000 && !silent) toast("This email is very long; Gmail may cut it off. Consider shortening it.", true);
+    if (d.image && !silent) copyImage(d.image);
     const w = window.open(url, "_blank");
     if (!w) return "blocked";
     d.opened = true;
@@ -536,6 +569,7 @@
     const c = d.contact;
     const { error } = await sb.from("email_log").insert({
       contact_id: c.id, template_id: d.template?.id ?? null, to_email: d.to, subject: d.subject, body: d.body,
+      ...(d.image ? { image_url: d.image.url } : {}),
     });
     if (error) return toast("Opened in Gmail, but logging failed: " + error.message, true);
     const patch = { last_contacted_at: new Date().toISOString() };
@@ -563,6 +597,7 @@
     const bad = pending.map(draftProblems).filter(Boolean);
     if (bad.length) return toast(bad[0], true);
     if (pending.length > 1 && !confirm(`Open ${pending.length} Gmail tabs, one per receiver? You'll review and press Send in each tab.`)) return;
+    if (state.draftImage) copyImage(state.draftImage);
     let opened = 0;
     for (const d of pending) {
       const r = openDraft(d, { silent: true });
@@ -580,11 +615,12 @@
     const body = $("#contact-rows");
     body.replaceChildren();
     const rows = state.contacts.filter((c) =>
-      !q || [c.facility, c.contact_name, c.city, c.county, c.email, c.category].join(" ").toLowerCase().includes(q));
+      !q || [c.facility, c.contact_name, c.city, c.county, c.email, c.category, c.campaign].join(" ").toLowerCase().includes(q))
+      .sort((a, b) => isShort(b) - isShort(a));
     $("#contact-count").textContent = `${rows.length} of ${state.contacts.length}`;
     for (const c of rows) {
       body.append(el("tr", {},
-        el("td", {}, el("strong", {}, c.facility)),
+        el("td", {}, el("strong", {}, c.facility), isShort(c) ? el("div", {}, el("span", { class: "tag shortm" }, "★ Short marketing")) : null),
         el("td", {}, el("span", { class: "tag " + c.category }, CATEGORY_LABEL[c.category])),
         el("td", {}, [c.city, c.county].filter(Boolean).join(", ")),
         el("td", {}, c.contact_name || "—"),
@@ -598,7 +634,7 @@
   $("#c-search").addEventListener("input", renderContacts);
   $("#c-add").addEventListener("click", () => openContact(null));
 
-  const CONTACT_FIELDS = ["facility", "category", "county", "city", "contact_name", "role", "email", "email_note", "phone", "status", "notes", "source"];
+  const CONTACT_FIELDS = ["facility", "category", "county", "city", "contact_name", "role", "email", "email_note", "phone", "status", "campaign", "notes", "source"];
 
   function openContact(c) {
     state.editingContactId = c ? c.id : null;
@@ -718,6 +754,124 @@
         el("td", {}, r.subject),
       ));
     }
+  }
+
+  // ================================================================ IMAGES
+  // Put the image link in the email: at {image_link} if the template has it,
+  // otherwise as its own paragraph just above the sign-off ("Best regards," etc.).
+  function withImageLine(body, img) {
+    if (body.includes("{image_link}")) return body;
+    const line = `${(img.caption || DEFAULT_IMAGE_CAPTION).replace(/[:.\s]+$/, "")}:\n{image_link}`;
+    const parts = body.split("\n\n");
+    let at = parts.findIndex((p) => p.includes("{signature}"));
+    if (at === -1) at = parts.length;
+    else if (at > 0 && parts[at - 1].trim().length < 40) at -= 1; // keep it above the sign-off
+    parts.splice(at, 0, line);
+    return parts.join("\n\n");
+  }
+
+  // Copy the picture itself so it can be pasted into the Gmail message (Ctrl+V).
+  // Must be called straight from a click. Gmail only accepts PNG from the clipboard.
+  function copyImage(img) {
+    if (!navigator.clipboard || !window.ClipboardItem) {
+      toast("This browser can't copy images. The image link is already in the email.", true);
+      return;
+    }
+    const png = fetch(img.url, { mode: "cors", cache: "force-cache" })
+      .then((r) => { if (!r.ok) throw new Error("download failed"); return r.blob(); })
+      .then(async (blob) => {
+        if (blob.type === "image/png") return blob;
+        const bmp = await createImageBitmap(blob);
+        const c = document.createElement("canvas");
+        c.width = bmp.width; c.height = bmp.height;
+        c.getContext("2d").drawImage(bmp, 0, 0);
+        return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("convert failed"))), "image/png"));
+      });
+    navigator.clipboard.write([new ClipboardItem({ "image/png": png })])
+      .then(() => toast("Image copied. Click inside the Gmail message and press Ctrl+V to show it."))
+      .catch(() => toast("Couldn't copy the image. The image link is still in the email.", true));
+  }
+
+  function renderImagePicker() {
+    const sel = $("#c-image");
+    const current = sel.value;
+    sel.replaceChildren(el("option", { value: "" }, "No image"),
+      ...state.images.map((im) => el("option", { value: String(im.id) }, im.name)));
+    sel.value = state.images.some((im) => String(im.id) === current) ? current : "";
+    updateImagePreview();
+  }
+
+  function updateImagePreview() {
+    const im = state.images.find((x) => String(x.id) === $("#c-image").value);
+    const thumb = $("#c-image-preview");
+    if (im) thumb.src = im.url;
+    show(thumb, !!im);
+  }
+  $("#c-image").addEventListener("change", updateImagePreview);
+
+  function renderImages() {
+    const err = $("#images-error");
+    err.textContent = state.imagesError || "";
+    show(err, !!state.imagesError);
+    $("#i-upload").disabled = !!state.imagesError;
+    const list = $("#image-list");
+    list.replaceChildren();
+    for (const im of state.images) {
+      list.append(el("article", { class: "image-card" },
+        el("img", { src: im.url, alt: im.name, loading: "lazy" }),
+        el("div", { class: "body" },
+          el("strong", {}, im.name),
+          el("span", { class: "small" }, im.caption || DEFAULT_IMAGE_CAPTION),
+          el("span", { class: "url" }, im.url),
+          el("div", { class: "actions" },
+            el("button", { class: "btn ghost small", onclick: () => copyText(im.url, "Link copied.") }, "Copy link"),
+            el("button", { class: "btn ghost small", onclick: () => copyImage(im) }, "Copy image"),
+            el("button", { class: "btn danger small", onclick: () => deleteImage(im) }, "Delete"),
+          ),
+        ),
+      ));
+    }
+    if (!state.images.length && !state.imagesError) list.append(el("p", { class: "muted pad" }, "No images yet. Upload your first flyer above."));
+  }
+
+  async function copyText(text, msg) {
+    try { await navigator.clipboard.writeText(text); toast(msg); } catch { toast("Copy failed – select the text manually.", true); }
+  }
+
+  $("#image-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const file = $("#i-file").files[0];
+    if (!file) return toast("Choose an image file first.", true);
+    if (!file.type.startsWith("image/")) return toast("That file isn't an image.", true);
+    if (file.size > 5 * 1024 * 1024) return toast("That image is over 5 MB. Please use a smaller file (under 1 MB is best for email).", true);
+    const btn = $("#i-upload");
+    btn.disabled = true; btn.textContent = "Uploading…";
+    try {
+      const safe = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "") || "image";
+      const path = `${Date.now()}-${safe}`;
+      const up = await sb.storage.from(IMAGE_BUCKET).upload(path, file, { contentType: file.type, cacheControl: "31536000", upsert: false });
+      if (up.error) throw up.error;
+      const url = sb.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+      const row = { name: $("#i-name").value.trim() || file.name, caption: $("#i-caption").value.trim() || null, path, url };
+      const ins = await sb.from("images").insert(row);
+      if (ins.error) throw ins.error;
+      $("#image-form").reset();
+      toast("Image uploaded. Pick it in Compose to share it.");
+      await refresh();
+    } catch (err) {
+      toast("Upload failed: " + (err.message || err), true);
+    } finally {
+      btn.disabled = false; btn.textContent = "Upload image";
+    }
+  });
+
+  async function deleteImage(im) {
+    if (!confirm(`Delete "${im.name}"? Links already sent in past emails will stop working.`)) return;
+    const del = await sb.from("images").delete().eq("id", im.id);
+    if (del.error) return toast(del.error.message, true);
+    await sb.storage.from(IMAGE_BUCKET).remove([im.path]);
+    toast("Image deleted.");
+    refresh();
   }
 
   // ================================================================ SETTINGS

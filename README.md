@@ -18,12 +18,14 @@ supabase/
   01_schema.sql           tables, security rules, default settings
   02_seed_contacts.sql    the 137 referral contacts (54 with emails)
   03_seed_templates.sql   the 11 email templates from the outreach sequence
+  04_images.sql           image library + public storage bucket for flyers
+  05_short_marketing.sql  "Short marketing" list tag, 4 tagged facilities, short RN/CNA staffing template
 ```
 
 ## 1. Set up Supabase (about 10 minutes)
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor → New query**. Paste and **Run** each file in order: `01_schema.sql`, then `02_seed_contacts.sql`, then `03_seed_templates.sql`.
+2. Open **SQL Editor → New query**. Paste and **Run** each file in order: `01_schema.sql`, then `02_seed_contacts.sql`, then `03_seed_templates.sql`, then `04_images.sql`, then `05_short_marketing.sql`.
 3. Go to **Authentication → Users → Add user → Create new user**. Enter your email and a strong password, and tick **Auto Confirm User**.
 4. **Important:** go to **Authentication → Sign In / Providers** and turn **off** "Allow new users to sign up". The anon key is public in your GitHub repo. With sign-ups off, only the users you create yourself can log in and see the contacts.
 5. Go to **Project Settings → API** and copy the **Project URL** and the **anon public** key.
@@ -64,6 +66,15 @@ To try it on your computer, open the folder in VS Code and use the "Live Server"
 5. **Templates tab.** Edit the wording, or create new templates. Use `{placeholders}`. Ones the app knows are filled automatically:
    `{first_name} {contact_name} {facility} {city} {county} {sender_name} {sender_title} {direct_line} {client_noun} {category_line} {signature} {previous_subject}`.
    Any other `{name}` becomes a fill-in box.
+
+### Sharing an image (flyer) with facilities
+
+1. **Images tab:** upload a JPG or PNG (under 1 MB is best), give it a name, and optionally the line that appears above the link.
+2. **Compose:** pick the image under "Image to share" before clicking Generate.
+3. Every email gets the image link just above the sign-off. To put the link somewhere else, add `{image_link}` to the template.
+4. When you click **Open in Gmail**, the picture is also copied. Click inside the Gmail message and press **Ctrl+V** to show it in the email itself. Use **Copy image** on a draft to copy it again.
+
+The image is stored in your Supabase project's public `outreach-images` bucket, so anyone with the link can view it. Don't upload anything with patient information.
 
 ### Good to know
 
